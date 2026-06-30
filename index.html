@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Marathon Log" />
+<title>Marathon Training Log</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/react-is@18/umd/react-is.production.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<style>
+  html, body { margin: 0; padding: 0; background: #1A2333; overscroll-behavior: none; }
+  body { -webkit-tap-highlight-color: transparent; }
+  .font-serif { font-family: 'Fraunces', serif; }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+  @keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .animate-slideup { animation: slideup 0.25s ease-out; }
+  input, textarea, button { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+const {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, BarChart, Bar
+} = Recharts;
+
+/* ---------------------------------------------------------
+   Lightweight inline-SVG icon shim (replaces lucide-react,
+   which isn't reliably available via plain CDN script tags)
+--------------------------------------------------------- */
+function makeIcon(paths) {
+  return function Icon({ size = 16, color = "currentColor", className = "" }) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+        stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        className={className}>
+        {paths}
+      </svg>
+    );
+  };
+}
+
+const Activity = makeIcon(<polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />);
+const Droplet = makeIcon(<path d="M12 2.69s-5.5 5.96-5.5 10.31a5.5 5.5 0 0 0 11 0c0-4.35-5.5-10.31-5.5-10.31z" />);
+const Moon = makeIcon(<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />);
+const UtensilsCrossed = makeIcon(<>
+  <path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8" />
+  <path d="M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6L8 14" />
+  <path d="m2.1 21.8 6.4-6.3" />
+  <path d="m19 15-6.5 6.5" />
+</>);
+const BookOpen = makeIcon(<>
+  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+</>);
+const Home = makeIcon(<>
+  <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+  <polyline points="9 22 9 12 15 12 15 22" />
+</>);
+const Plus = makeIcon(<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>);
+const X = makeIcon(<><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>);
+const ChevronRight = makeIcon(<polyline points="9 18 15 12 9 6" />);
+const ChevronLeft = makeIcon(<polyline points="15 18 9 12 15 6" />);
+const Dumbbell = makeIcon(<>
+  <path d="M14.4 14.4 9.6 9.6" />
+  <path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z" />
+  <path d="m21.5 21.5-1.4-1.4" />
+  <path d="M3.9 3.9 2.5 2.5" />
+  <path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z" />
+</>);
+const TrendingUp = makeIcon(<>
+  <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+  <polyline points="16 7 22 7 22 13" />
+</>);
+const Check = makeIcon(<polyline points="20 6 9 17 4 12" />);
+const Edit3 = makeIcon(<><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></>);
+const Trash2 = makeIcon(<>
+  <polyline points="3 6 5 6 21 6" />
+  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  <line x1="10" y1="11" x2="10" y2="17" />
+  <line x1="14" y1="11" x2="14" y2="17" />
+</>);
+const Calendar = makeIcon(<>
+  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+  <line x1="16" y1="2" x2="16" y2="6" />
+  <line x1="8" y1="2" x2="8" y2="6" />
+  <line x1="3" y1="10" x2="21" y2="10" />
+</>);
+const Clock = makeIcon(<><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>);
+const Scale = makeIcon(<>
+  <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+  <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+  <path d="M7 21h10" />
+  <path d="M12 3v18" />
+  <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+</>);
+const Flame = makeIcon(<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />);
+
+/* ---------------------------------------------------------
+   FOOD DATABASE + PARSER
+   Per-unit macro data (calories, protein, carbs, fat in grams)
+   Lookup is approximate, intended as a fast estimate.
+--------------------------------------------------------- */
+
+// Base nutrition per 100g unless otherwise noted, or per common unit
+const FOOD_DB = [
+  // Proteins
+  { keys: ["chicken breast", "chicken"], unit: "oz", grams: 28, cal: 47, p: 8.7, c: 0, f: 1.0 },
+  { keys: ["ground beef 90", "ground beef", "beef"], unit: "oz", grams: 28, cal: 60, p: 7.3, c: 0, f: 3.3 },
+  { keys: ["salmon"], unit: "oz", grams: 28, cal: 59, p: 6.2, c: 0, f: 3.7 },
+  { keys: ["egg", "eggs", "large egg"], unit: "egg", grams: 50, cal: 72, p: 6.3, c: 0.4, f: 4.8 },
+  { keys: ["egg white", "egg whites"], unit: "egg white", grams: 33, cal: 17, p: 3.6, c: 0.2, f: 0.1 },
+  { keys: ["greek yogurt", "yogurt"], unit: "cup", grams: 245, cal: 146, p: 25, c: 8, f: 0.7 },
+  { keys: ["whey protein", "protein powder", "protein shake"], unit: "scoop", grams: 32, cal: 120, p: 24, c: 3, f: 1.5 },
+  { keys: ["tofu"], unit: "oz", grams: 28, cal: 19, p: 2.2, c: 0.5, f: 1.1 },
+  { keys: ["turkey breast", "turkey"], unit: "oz", grams: 28, cal: 32, p: 6.7, c: 0, f: 0.4 },
+  { keys: ["shrimp"], unit: "oz", grams: 28, cal: 28, p: 6, c: 0.1, f: 0.3 },
+  { keys: ["tuna", "canned tuna"], unit: "oz", grams: 28, cal: 33, p: 7.3, c: 0, f: 0.3 },
+  { keys: ["cottage cheese"], unit: "cup", grams: 226, cal: 206, p: 28, c: 9, f: 9 },
+
+  // Carbs / grains
+  { keys: ["rice", "white rice", "cooked rice"], unit: "cup", grams: 158, cal: 205, p: 4.3, c: 45, f: 0.4 },
+  { keys: ["brown rice"], unit: "cup", grams: 195, cal: 216, p: 5, c: 45, f: 1.8 },
+  { keys: ["oats", "oatmeal"], unit: "cup", grams: 234, cal: 158, p: 6, c: 27, f: 3.2 },
+  { keys: ["bread", "slice bread", "toast"], unit: "slice", grams: 28, cal: 75, p: 3, c: 13, f: 1 },
+  { keys: ["bagel"], unit: "bagel", grams: 105, cal: 277, p: 11, c: 55, f: 1.7 },
+  { keys: ["pasta", "spaghetti"], unit: "cup", grams: 140, cal: 221, p: 8, c: 43, f: 1.3 },
+  { keys: ["potato", "baked potato"], unit: "medium", grams: 173, cal: 161, p: 4.3, c: 37, f: 0.2 },
+  { keys: ["sweet potato"], unit: "medium", grams: 130, cal: 112, p: 2, c: 26, f: 0.1 },
+  { keys: ["banana"], unit: "medium", grams: 118, cal: 105, p: 1.3, c: 27, f: 0.4 },
+  { keys: ["apple"], unit: "medium", grams: 182, cal: 95, p: 0.5, c: 25, f: 0.3 },
+  { keys: ["tortilla"], unit: "tortilla", grams: 49, cal: 144, p: 4, c: 24, f: 3.4 },
+  { keys: ["granola bar", "protein bar"], unit: "bar", grams: 50, cal: 200, p: 10, c: 22, f: 8 },
+
+  // Fats
+  { keys: ["avocado"], unit: "medium", grams: 150, cal: 240, p: 3, c: 13, f: 22 },
+  { keys: ["peanut butter"], unit: "tbsp", grams: 16, cal: 94, p: 4, c: 3, f: 8 },
+  { keys: ["almonds"], unit: "oz", grams: 28, cal: 164, p: 6, c: 6, f: 14 },
+  { keys: ["olive oil"], unit: "tbsp", grams: 14, cal: 119, p: 0, c: 0, f: 14 },
+  { keys: ["butter"], unit: "tbsp", grams: 14, cal: 102, p: 0.1, c: 0, f: 11.5 },
+  { keys: ["cheese", "cheddar"], unit: "oz", grams: 28, cal: 113, p: 7, c: 0.4, f: 9.3 },
+
+  // Veg
+  { keys: ["broccoli"], unit: "cup", grams: 91, cal: 31, p: 2.6, c: 6, f: 0.3 },
+  { keys: ["spinach"], unit: "cup", grams: 30, cal: 7, p: 0.9, c: 1.1, f: 0.1 },
+  { keys: ["salad", "mixed greens"], unit: "cup", grams: 36, cal: 9, p: 0.9, c: 1.7, f: 0.1 },
+  { keys: ["broccoli", "green beans"], unit: "cup", grams: 100, cal: 31, p: 1.8, c: 7, f: 0.2 },
+
+  // Dairy / milk
+  { keys: ["milk", "whole milk"], unit: "cup", grams: 244, cal: 149, p: 7.7, c: 12, f: 7.9 },
+  { keys: ["almond milk"], unit: "cup", grams: 240, cal: 39, p: 1.5, c: 1.5, f: 2.9 },
+
+  // Common combos
+  { keys: ["protein shake with milk"], unit: "shake", grams: 0, cal: 270, p: 32, c: 15, f: 6 },
+];
+
+function singularize(word) {
+  if (word.endsWith("ies")) return word.slice(0, -3) + "y";
+  if (word.endsWith("es") && word.length > 3) return word.slice(0, -2);
+  if (word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
+  return word;
+}
+
+// Extract a leading quantity from text like "2 eggs", "1.5 cups rice", "6 oz chicken"
+function extractQuantity(text) {
+  const numWords = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, a: 1, an: 1 };
+  const match = text.match(/^(\d+(\.\d+)?|\d+\/\d+)\s*/);
+  if (match) {
+    let qty = match[1];
+    if (qty.includes("/")) {
+      const [n, d] = qty.split("/").map(Number);
+      qty = n / d;
+    } else {
+      qty = parseFloat(qty);
+    }
+    return { qty, rest: text.slice(match[0].length).trim() };
+  }
+  const wordMatch = text.match(/^([a-z]+)\s+/);
+  if (wordMatch && numWords[wordMatch[1]]) {
+    return { qty: numWords[wordMatch[1]], rest: text.slice(wordMatch[0].length).trim() };
+  }
+  return { qty: 1, rest: text.trim() };
+}
+
+const UNIT_ALIASES = {
+  cups: "cup", c: "cup",
+  ounces: "oz", ounce: "oz",
+  tablespoons: "tbsp", tablespoon: "tbsp", tbs: "tbsp",
+  teaspoons: "tsp", teaspoon: "tsp",
+  slices: "slice",
+  scoops: "scoop",
+  bars: "bar",
+  eggs: "egg",
+  grams: "g", gram: "g",
+};
+
+function stripUnitWord(text) {
+  const words = text.split(" ");
+  if (words.length > 1) {
+    const first = words[0].toLowerCase();
+    const normalized = UNIT_ALIASES[first] || first;
+    const knownUnits = ["cup", "oz", "tbsp", "tsp", "slice", "scoop", "bar", "egg", "g", "medium", "large", "small"];
+    if (knownUnits.includes(normalized)) {
+      return { unit: normalized, rest: words.slice(1).join(" ") };
+    }
+  }
+  return { unit: null, rest: text };
+}
+
+/**
+ * Parses a free-text food entry like "2 eggs" or "6 oz chicken breast"
+ * Returns { matched: bool, name, cal, p, c, f, qty, unit }
+ */
+function estimateFood(input) {
+  const raw = input.trim().toLowerCase();
+  if (!raw) return null;
+
+  const { qty, rest } = extractQuantity(raw);
+  const { unit: parsedUnit, rest: foodText } = stripUnitWord(rest);
+  const cleanedFoodText = foodText.replace(/^of\s+/, "").trim();
+  const singularFoodText = cleanedFoodText
+    .split(" ")
+    .map(singularize)
+    .join(" ");
+
+  // Find best match: exact key match preferred, then substring match
+  let best = null;
+  let bestScore = 0;
+  for (const item of FOOD_DB) {
+    for (const key of item.keys) {
+      if (cleanedFoodText === key || singularFoodText === key) {
+        best = item; bestScore = 100; break;
+      }
+      if (cleanedFoodText.includes(key) || key.includes(cleanedFoodText)) {
+        const score = key.length;
+        if (score > bestScore) { best = item; bestScore = score; }
+      }
+    }
+    if (bestScore === 100) break;
+  }
+
+  if (!best) {
+    return { matched: false, name: input, qty, cal: 0, p: 0, c: 0, f: 0 };
+  }
+
+  // Determine multiplier
+  let multiplier = qty;
+  if (parsedUnit && parsedUnit !== best.unit) {
+    if (parsedUnit === "g" && best.grams) {
+      multiplier = qty / best.grams;
+    }
+    // otherwise just trust qty as "number of base units" even if labeled differently
+  }
+
+  return {
+    matched: true,
+    name: input,
+    qty,
+    unit: best.unit,
+    cal: Math.round(best.cal * multiplier),
+    p: Math.round(best.p * multiplier * 10) / 10,
+    c: Math.round(best.c * multiplier * 10) / 10,
+    f: Math.round(best.f * multiplier * 10) / 10,
+  };
+}
+
+function sumMacros(items) {
+  return items.reduce(
+    (acc, item) => ({
+      cal: acc.cal + (item.cal || 0),
+      p: acc.p + (item.p || 0),
+      c: acc.c + (item.c || 0),
+      f: acc.f + (item.f || 0),
+    }),
+    { cal: 0, p: 0, c: 0, f: 0 }
+  );
+}
+
+
+/* ---------------------------------------------------------
+   STRENGTH TRAINING PLAN
+   3-day/week full body split.
+   Equipment: elliptical, squat rack, barbell, bench, adjustable dumbbells
+--------------------------------------------------------- */
+
+const EQUIPMENT = ["Elliptical", "Squat rack", "Barbell", "Bench", "Adjustable dumbbells"];
+
+const STRENGTH_PLAN = [
+  {
+    id: "day-a",
+    name: "Day A — Squat Focus",
+    dayLabel: "Full Body",
+    warmup: "5-8 min elliptical, easy pace, to raise heart rate",
+    exercises: [
+      { name: "Barbell Back Squat", equipment: "Squat rack, barbell", sets: 4, reps: "6-8", notes: "Main lift. Rest 2-3 min between sets." },
+      { name: "Flat Bench Press", equipment: "Bench, barbell", sets: 4, reps: "6-8", notes: "Rest 2 min between sets." },
+      { name: "Dumbbell Romanian Deadlift", equipment: "Adjustable dumbbells", sets: 3, reps: "10-12", notes: "Keep slight knee bend, hinge at hips." },
+      { name: "Dumbbell Row", equipment: "Adjustable dumbbells, bench", sets: 3, reps: "10 per side", notes: "Brace on bench, pull to hip." },
+      { name: "Plank", equipment: "Bodyweight", sets: 3, reps: "45 sec", notes: "Keep hips level, brace core." },
+    ],
+  },
+  {
+    id: "day-b",
+    name: "Day B — Press Focus",
+    dayLabel: "Full Body",
+    warmup: "5-8 min elliptical, easy pace, to raise heart rate",
+    exercises: [
+      { name: "Barbell Overhead Press", equipment: "Squat rack or stand, barbell", sets: 4, reps: "6-8", notes: "Standing, brace core, press straight up." },
+      { name: "Barbell Romanian Deadlift", equipment: "Barbell", sets: 4, reps: "8", notes: "Control the eccentric, don't round back." },
+      { name: "Dumbbell Bulgarian Split Squat", equipment: "Adjustable dumbbells, bench", sets: 3, reps: "8-10 per leg", notes: "Rear foot elevated on bench." },
+      { name: "Incline Dumbbell Press", equipment: "Adjustable dumbbells, bench", sets: 3, reps: "10-12", notes: "Set bench to 30-45 degrees." },
+      { name: "Dumbbell Lateral Raise", equipment: "Adjustable dumbbells", sets: 3, reps: "12-15", notes: "Light weight, controlled tempo." },
+    ],
+  },
+  {
+    id: "day-c",
+    name: "Day C — Posterior Chain",
+    dayLabel: "Full Body",
+    warmup: "5-8 min elliptical, easy pace, to raise heart rate",
+    exercises: [
+      { name: "Barbell Front Squat", equipment: "Squat rack, barbell", sets: 4, reps: "6-8", notes: "Elbows high, upright torso." },
+      { name: "Dumbbell Bench Press", equipment: "Adjustable dumbbells, bench", sets: 4, reps: "8-10", notes: "Full range of motion." },
+      { name: "Barbell Hip Thrust", equipment: "Bench, barbell", sets: 3, reps: "10-12", notes: "Shoulders on bench, drive through heels." },
+      { name: "Dumbbell Curl + Overhead Triceps Extension", equipment: "Adjustable dumbbells", sets: 3, reps: "10-12 each", notes: "Superset, minimal rest between." },
+      { name: "Dead Bug", equipment: "Bodyweight", sets: 3, reps: "10 per side", notes: "Keep low back pressed to floor." },
+    ],
+  },
+];
+
+// Suggested weekly schedule note for runners: pair strength with easy/rest run days,
+// avoid heavy lower body the day before a long run.
+const STRENGTH_SCHEDULE_NOTE =
+  "Suggested: do strength on easy-run or rest days (Mon, Wed, Fri work well), and skip or go light the day before your long run.";
+
+/* ---------------------------------------------------------
+   CONSTANTS
+--------------------------------------------------------- */
+const RACE_DATE = new Date("2026-10-25T00:00:00");
+const PLAN_START = new Date("2026-07-05T00:00:00");
+// Uses the real current date on the user's device
+function getToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Default daily macro targets (editable in Nutrition tab)
+const DEFAULT_TARGETS = { cal: 2600, p: 160, c: 320, f: 80 };
+
+function todayKey(d = new Date()) { return d.toISOString().slice(0, 10); }
+function fmtDate(d) { return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); }
+function fmtDateLong(d) { return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }); }
+function fmtShort(d) { return d.toLocaleDateString("en-US", { month: "numeric", day: "numeric" }); }
+function addDays(d, n) { return new Date(d.getTime() + n * DAY_MS); }
+
+/* ---------------------------------------------------------
+   16-WEEK MARATHON PLAN
+--------------------------------------------------------- */
+function buildDefaultPlan() {
+  const longRuns = [8, 10, 8, 11, 13, 9, 14, 16, 10, 17, 19, 11, 20, 12, 8, 0];
+  const weekFocus = [
+    "Base building", "Base building", "Recovery week", "Base + tempo",
+    "Endurance", "Recovery week", "Endurance", "Peak long run",
+    "Recovery week", "Peak long run", "Peak long run (longest)", "Recovery week",
+    "Final peak long run", "Taper begins", "Taper", "Race week"
+  ];
+  const plan = [];
+  for (let w = 0; w < 16; w++) {
+    const weekStart = addDays(PLAN_START, w * 7);
+    const isRaceWeek = w === 15;
+    const days = [];
+    for (let d = 0; d < 7; d++) {
+      const date = addDays(weekStart, d);
+      let workout = null;
+      if (d === 6) {
+        workout = isRaceWeek
+          ? { type: "race", label: "MARATHON RACE DAY", distance: 26.2 }
+          : { type: "long", label: "Long run", distance: longRuns[w] };
+      } else if (d === 0) {
+        workout = { type: "strength", label: "Strength: Day A", distance: 0 };
+      } else if (d === 1) {
+        workout = { type: "easy", label: "Easy run", distance: isRaceWeek ? 0 : 4 };
+      } else if (d === 2) {
+        workout = isRaceWeek
+          ? { type: "rest", label: "Rest", distance: 0 }
+          : { type: "strength", label: "Strength: Day B", distance: 0 };
+      } else if (d === 3) {
+        workout = { type: "easy", label: "Easy run", distance: isRaceWeek ? 0 : 4 };
+      } else if (d === 4) {
+        workout = isRaceWeek
+          ? { type: "rest", label: "Rest", distance: 0 }
+          : { type: "strength", label: "Strength: Day C", distance: 0 };
+      } else if (d === 5) {
+        workout = isRaceWeek
+          ? { type: "rest", label: "Rest - shake out 2mi easy", distance: 2 }
+          : { type: "easy", label: "Easy run + strides", distance: 3 };
+      }
+      days.push({ date: todayKey(date), workout });
+    }
+    plan.push({ week: w + 1, focus: weekFocus[w], weekStart: todayKey(weekStart), days });
+  }
+  return plan;
+}
+
+const WORKOUT_COLORS = {
+  long: "#D9622B", easy: "#6B8F71", speed: "#B23A48",
+  rest: "#8B93A1", race: "#D9622B", strength: "#5C6470",
+};
+const WORKOUT_LABELS = {
+  long: "Long run", easy: "Easy run", speed: "Speed",
+  rest: "Rest", race: "Race", strength: "Strength",
+};
+
+const DEFAULT_WORKOUT_LIBRARY = [
+  { id: "lib-1", name: "Easy Run", category: "Run", notes: "Conversational pace, nose-breathing effort. Should feel easy the whole way." },
+  { id: "lib-2", name: "Tempo Run", category: "Run", notes: "Warm up 10 min easy, then sustained effort at 'comfortably hard' pace, cool down 10 min easy." },
+  { id: "lib-3", name: "Long Run", category: "Run", notes: "Slow and steady, focus on time on feet. Practice race-day fueling." },
+  { id: "lib-4", name: "Strides / Speed", category: "Run", notes: "Warm up, then 6-8 x 20-30 sec fast (not all-out) with full recovery between." },
+];
+
+/* ---------------------------------------------------------
+   STORAGE HELPERS
+--------------------------------------------------------- */
+async function storageGet(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem("marathon-app:" + key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+async function storageSet(key, value) {
+  try { window.localStorage.setItem("marathon-app:" + key, JSON.stringify(value)); }
+  catch (e) { console.error("storage set failed", e); }
+}
+
+/* ---------------------------------------------------------
+   SHARED UI
+--------------------------------------------------------- */
+function Pill({ children, color }) {
+  return (
+    <span style={{ background: color + "20", color, border: `1px solid ${color}50` }}
+      className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap">
+      {children}
+    </span>
+  );
+}
+function SectionLabel({ children }) {
+  return <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-[#8B93A1] mb-2">{children}</div>;
+}
+function Card({ children, className = "" }) {
+  return (
+    <div className={`bg-[#F7F3EC] rounded-2xl p-4 shadow-sm ${className}`} style={{ border: "1px solid #E5DECC" }}>
+      {children}
+    </div>
+  );
+}
+function EmptyState({ icon: Icon, title, body }) {
+  return (
+    <div className="flex flex-col items-center text-center py-10 px-6">
+      <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ background: "#E5DECC" }}>
+        <Icon size={20} color="#8B93A1" />
+      </div>
+      <div className="font-serif text-[17px] text-[#1A2333] mb-1">{title}</div>
+      <div className="text-[13px] text-[#8B93A1] leading-snug max-w-[220px]">{body}</div>
+    </div>
+  );
+}
+function MacroBar({ label, value, target, color }) {
+  const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] font-mono uppercase tracking-wide text-[#8B93A1]">{label}</span>
+        <span className="text-[12px] font-mono text-[#1A2333]">{Math.round(value)}<span className="text-[#8B93A1]">/{target}g</span></span>
+      </div>
+      <div className="h-1.5 rounded-full bg-[#E5DECC] overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color, transition: "width 0.4s ease" }} />
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   TODAY VIEW
+--------------------------------------------------------- */
+function TodayRing({ daysLeft, totalDays }) {
+  const pct = Math.max(0, Math.min(1, 1 - daysLeft / totalDays));
+  const r = 54, circ = 2 * Math.PI * r, offset = circ * (1 - pct);
+  return (
+    <div className="relative w-[140px] h-[140px] mx-auto">
+      <svg width="140" height="140" viewBox="0 0 140 140">
+        <circle cx="70" cy="70" r={r} fill="none" stroke="#2A3548" strokeWidth="10" />
+        <circle cx="70" cy="70" r={r} fill="none" stroke="#D9622B" strokeWidth="10"
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          transform="rotate(-90 70 70)" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="font-mono text-[34px] leading-none text-[#F7F3EC]">{daysLeft}</div>
+        <div className="font-mono text-[10px] uppercase tracking-widest text-[#8B93A1] mt-1">days to go</div>
+      </div>
+    </div>
+  );
+}
+
+function TodayView({ today, logs, openLogger, weekInfo, targets }) {
+  const key = todayKey(today);
+  const dayLogs = logs[key] || {};
+  const daysLeft = Math.max(0, Math.ceil((RACE_DATE - today) / DAY_MS));
+  const totalDays = Math.ceil((RACE_DATE - PLAN_START) / DAY_MS);
+  const todaysWorkout = weekInfo?.days.find(d => d.date === key)?.workout;
+
+  const cardioCount = (dayLogs.cardio || []).length;
+  const strengthDone = !!dayLogs.strengthDone;
+  const allMeals = [...(dayLogs.meals?.breakfast || []), ...(dayLogs.meals?.lunch || []), ...(dayLogs.meals?.dinner || []), ...(dayLogs.meals?.snacks || [])];
+  const macros = sumMacros(allMeals);
+  const water = dayLogs.water || 0;
+  const sleep = dayLogs.sleep;
+  const weight = dayLogs.weight;
+
+  return (
+    <div className="px-4 pt-2 pb-4 space-y-5">
+      <div className="text-center pt-2">
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#8B93A1] mb-1">{fmtDateLong(today)}</div>
+        <h1 className="font-serif text-[26px] text-[#F7F3EC]">Marathon Day Countdown</h1>
+      </div>
+
+      <TodayRing daysLeft={daysLeft} totalDays={totalDays} />
+
+      {todaysWorkout && (
+        <Card className="!bg-[#1A2333] !border-[#2A3548]">
+          <div className="flex items-center justify-between mb-1">
+            <SectionLabel>Today's Plan</SectionLabel>
+            <Pill color={WORKOUT_COLORS[todaysWorkout.type]}>{WORKOUT_LABELS[todaysWorkout.type]}</Pill>
+          </div>
+          <div className="font-serif text-[19px] text-[#F7F3EC]">{todaysWorkout.label}</div>
+          {todaysWorkout.distance > 0 && (
+            <div className="font-mono text-[13px] text-[#8B93A1] mt-1">{todaysWorkout.distance} mi target</div>
+          )}
+        </Card>
+      )}
+
+      <div>
+        <SectionLabel>Nutrition Today</SectionLabel>
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="font-mono text-[26px] text-[#1A2333] leading-none">{Math.round(macros.cal)}</div>
+              <div className="text-[11px] text-[#8B93A1] mt-0.5">of {targets.cal} cal</div>
+            </div>
+            <button onClick={() => openLogger("meals")} className="px-3 py-1.5 rounded-full bg-[#1A2333] text-[#F7F3EC] text-[12px] font-medium">
+              Log food
+            </button>
+          </div>
+          <div className="space-y-2">
+            <MacroBar label="Protein" value={macros.p} target={targets.p} color="#D9622B" />
+            <MacroBar label="Carbs" value={macros.c} target={targets.c} color="#6B8F71" />
+            <MacroBar label="Fat" value={macros.f} target={targets.f} color="#6B5BA0" />
+          </div>
+        </Card>
+      </div>
+
+      <div>
+        <SectionLabel>Today's Log</SectionLabel>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => openLogger("cardio")} className="text-left">
+            <Card className="!p-3">
+              <div className="flex items-center justify-between">
+                <Activity size={18} color="#D9622B" />
+                <span className="font-mono text-[20px] text-[#1A2333]">{cardioCount}</span>
+              </div>
+              <div className="text-[12px] text-[#5C6470] mt-1">Cardio logged</div>
+            </Card>
+          </button>
+          <button onClick={() => openLogger("strength")} className="text-left">
+            <Card className="!p-3">
+              <div className="flex items-center justify-between">
+                <Dumbbell size={18} color="#5C6470" />
+                {strengthDone ? <Check size={18} color="#6B8F71" /> : <span className="font-mono text-[20px] text-[#1A2333]">—</span>}
+              </div>
+              <div className="text-[12px] text-[#5C6470] mt-1">Strength</div>
+            </Card>
+          </button>
+          <button onClick={() => openLogger("water")} className="text-left">
+            <Card className="!p-3">
+              <div className="flex items-center justify-between">
+                <Droplet size={18} color="#3D7EA6" />
+                <span className="font-mono text-[20px] text-[#1A2333]">{water}</span>
+              </div>
+              <div className="text-[12px] text-[#5C6470] mt-1">Cups of water</div>
+            </Card>
+          </button>
+          <button onClick={() => openLogger("sleep")} className="text-left">
+            <Card className="!p-3">
+              <div className="flex items-center justify-between">
+                <Moon size={18} color="#6B5BA0" />
+                <span className="font-mono text-[20px] text-[#1A2333]">{sleep ? `${sleep}h` : "—"}</span>
+              </div>
+              <div className="text-[12px] text-[#5C6470] mt-1">Sleep last night</div>
+            </Card>
+          </button>
+        </div>
+        <button onClick={() => openLogger("weight")} className="text-left w-full mt-3">
+          <Card className="!p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Scale size={18} color="#8B93A1" />
+                <span className="text-[13px] text-[#5C6470]">Weight today</span>
+              </div>
+              <span className="font-mono text-[18px] text-[#1A2333]">{weight ? `${weight} lb` : "Log →"}</span>
+            </div>
+          </Card>
+        </button>
+      </div>
+
+      {dayLogs.note && (
+        <Card>
+          <SectionLabel>Today's Notes</SectionLabel>
+          <div className="text-[14px] text-[#1A2333] leading-relaxed whitespace-pre-wrap">{dayLogs.note}</div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   LOG MODAL
+--------------------------------------------------------- */
+function LogModal({ mode, date, dayLogs, onClose, onSave }) {
+  const [cardioForm, setCardioForm] = useState({ activity: "Running", distance: "", time: "", notes: "" });
+  const [mealSlot, setMealSlot] = useState("breakfast");
+  const [foodInput, setFoodInput] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [waterCups, setWaterCups] = useState(dayLogs.water || 0);
+  const [sleepHours, setSleepHours] = useState(dayLogs.sleep || "");
+  const [weightVal, setWeightVal] = useState(dayLogs.weight || "");
+  const [noteText, setNoteText] = useState(dayLogs.note || "");
+  const [strengthDayId, setStrengthDayId] = useState(dayLogs.strengthDayId || STRENGTH_PLAN[0].id);
+  const [completedSets, setCompletedSets] = useState(dayLogs.completedSets || {});
+  const [strengthNotes, setStrengthNotes] = useState(dayLogs.strengthNotes || "");
+
+  const title = {
+    cardio: "Log Cardio", meals: "Log Meals", water: "Log Water",
+    sleep: "Log Sleep", weight: "Log Weight", note: "Add a Comment", strength: "Log Strength",
+  }[mode];
+
+  function saveCardio() {
+    if (!cardioForm.activity) return;
+    const entry = { id: Date.now().toString(), ...cardioForm };
+    onSave({ cardio: [...(dayLogs.cardio || []), entry] });
+    setCardioForm({ activity: "Running", distance: "", time: "", notes: "" });
+  }
+
+  function handlePreview() {
+    if (!foodInput.trim()) { setPreview(null); return; }
+    setPreview(estimateFood(foodInput));
+  }
+
+  function addFood() {
+    if (!preview) return;
+    const meals = { ...(dayLogs.meals || {}) };
+    meals[mealSlot] = [...(meals[mealSlot] || []), preview];
+    onSave({ meals });
+    setFoodInput(""); setPreview(null);
+  }
+
+  function removeFood(slot, idx) {
+    const meals = { ...(dayLogs.meals || {}) };
+    meals[slot] = meals[slot].filter((_, i) => i !== idx);
+    onSave({ meals });
+  }
+
+  function adjustPreviewField(field, val) {
+    setPreview(p => ({ ...p, [field]: val === "" ? 0 : Number(val) }));
+  }
+
+  function saveWater() { onSave({ water: waterCups }); }
+  function saveSleep() { onSave({ sleep: sleepHours === "" ? null : Number(sleepHours) }); }
+  function saveWeight() { onSave({ weight: weightVal === "" ? null : Number(weightVal) }); }
+  function saveNote() { onSave({ note: noteText }); }
+
+  function toggleSet(exIdx, setIdx) {
+    const key = `${exIdx}-${setIdx}`;
+    const updated = { ...completedSets, [key]: !completedSets[key] };
+    setCompletedSets(updated);
+    onSave({ completedSets: updated, strengthDayId });
+  }
+  function finishStrength() {
+    onSave({ strengthDone: true, strengthDayId, completedSets, strengthNotes });
+  }
+
+  const currentDay = STRENGTH_PLAN.find(d => d.id === strengthDayId);
+  const allMealItems = ["breakfast", "lunch", "dinner", "snacks"].flatMap(slot =>
+    (dayLogs.meals?.[slot] || []).map((item, idx) => ({ ...item, slot, idx }))
+  );
+  const dayTotals = sumMacros(allMealItems);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-[#F7F3EC] rounded-t-3xl max-h-[88vh] overflow-y-auto pb-8 animate-slideup">
+        <div className="sticky top-0 bg-[#F7F3EC] flex items-center justify-between px-5 pt-5 pb-3 border-b border-[#E5DECC] z-10">
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-widest text-[#8B93A1]">{fmtDate(date)}</div>
+            <h2 className="font-serif text-[20px] text-[#1A2333]">{title}</h2>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#E5DECC] flex items-center justify-center">
+            <X size={16} color="#5C6470" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {mode === "cardio" && (
+            <>
+              <div>
+                <SectionLabel>Activity</SectionLabel>
+                <div className="flex gap-2 flex-wrap">
+                  {["Running", "Elliptical", "Cycling", "Swimming", "Walking", "Other"].map(a => (
+                    <button key={a} onClick={() => setCardioForm(f => ({ ...f, activity: a }))}
+                      className="px-3 py-1.5 rounded-full text-[13px] font-medium"
+                      style={{ background: cardioForm.activity === a ? "#D9622B" : "#E5DECC", color: cardioForm.activity === a ? "#F7F3EC" : "#5C6470" }}>
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <SectionLabel>Distance (mi)</SectionLabel>
+                  <input type="number" inputMode="decimal" placeholder="0.0" value={cardioForm.distance}
+                    onChange={e => setCardioForm(f => ({ ...f, distance: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl bg-white font-mono text-[16px] text-[#1A2333] outline-none" style={{ border: "1px solid #E5DECC" }} />
+                </div>
+                <div>
+                  <SectionLabel>Time</SectionLabel>
+                  <input type="text" placeholder="mm:ss or h:mm" value={cardioForm.time}
+                    onChange={e => setCardioForm(f => ({ ...f, time: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl bg-white font-mono text-[16px] text-[#1A2333] outline-none" style={{ border: "1px solid #E5DECC" }} />
+                </div>
+              </div>
+              <div>
+                <SectionLabel>Comments</SectionLabel>
+                <textarea placeholder="How did it feel? Weather, effort, anything notable..." value={cardioForm.notes}
+                  onChange={e => setCardioForm(f => ({ ...f, notes: e.target.value }))} rows={3}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white text-[14px] text-[#1A2333] outline-none resize-none" style={{ border: "1px solid #E5DECC" }} />
+              </div>
+              <button onClick={saveCardio} className="w-full py-3 rounded-xl bg-[#1A2333] text-[#F7F3EC] font-medium text-[15px]">Save Activity</button>
+              {(dayLogs.cardio || []).length > 0 && (
+                <div className="pt-2">
+                  <SectionLabel>Logged Today</SectionLabel>
+                  <div className="space-y-2">
+                    {dayLogs.cardio.map(c => (
+                      <div key={c.id} className="flex items-start justify-between bg-white rounded-xl px-3 py-2.5" style={{ border: "1px solid #E5DECC" }}>
+                        <div>
+                          <div className="text-[14px] font-medium text-[#1A2333]">{c.activity}</div>
+                          <div className="font-mono text-[12px] text-[#8B93A1]">{c.distance ? `${c.distance} mi` : ""} {c.time ? `· ${c.time}` : ""}</div>
+                          {c.notes && <div className="text-[12px] text-[#5C6470] mt-1">{c.notes}</div>}
+                        </div>
+                        <button onClick={() => onSave({ cardio: dayLogs.cardio.filter(x => x.id !== c.id) })} className="p-1">
+                          <Trash2 size={14} color="#B23A48" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {mode === "strength" && (
+            <>
+              <div>
+                <SectionLabel>Choose Workout</SectionLabel>
+                <div className="flex flex-col gap-2">
+                  {STRENGTH_PLAN.map(d => (
+                    <button key={d.id} onClick={() => setStrengthDayId(d.id)}
+                      className="px-3 py-2 rounded-xl text-left text-[13px] font-medium"
+                      style={{ background: strengthDayId === d.id ? "#1A2333" : "#E5DECC", color: strengthDayId === d.id ? "#F7F3EC" : "#5C6470" }}>
+                      {d.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="text-[12px] text-[#8B93A1] italic">{currentDay.warmup}</div>
+              <div className="space-y-3">
+                {currentDay.exercises.map((ex, exIdx) => (
+                  <div key={exIdx} className="bg-white rounded-xl p-3" style={{ border: "1px solid #E5DECC" }}>
+                    <div className="text-[14px] font-medium text-[#1A2333]">{ex.name}</div>
+                    <div className="text-[11px] text-[#8B93A1] font-mono mt-0.5">{ex.equipment} · {ex.sets} × {ex.reps}</div>
+                    <div className="text-[12px] text-[#5C6470] mt-1">{ex.notes}</div>
+                    <div className="flex gap-1.5 mt-2">
+                      {Array.from({ length: ex.sets }).map((_, setIdx) => {
+                        const key = `${exIdx}-${setIdx}`;
+                        const done = completedSets[key];
+                        return (
+                          <button key={setIdx} onClick={() => toggleSet(exIdx, setIdx)}
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-mono"
+                            style={{ background: done ? "#6B8F71" : "#E5DECC", color: done ? "white" : "#8B93A1" }}>
+                            {setIdx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <SectionLabel>Comments</SectionLabel>
+                <textarea placeholder="How did it feel? Weights used, energy level..." value={strengthNotes}
+                  onChange={e => setStrengthNotes(e.target.value)} rows={3}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white text-[14px] text-[#1A2333] outline-none resize-none" style={{ border: "1px solid #E5DECC" }} />
+              </div>
+              <button onClick={finishStrength} className="w-full py-3 rounded-xl bg-[#1A2333] text-[#F7F3EC] font-medium text-[15px]">Save Workout</button>
+            </>
+          )}
+
+          {mode === "meals" && (
+            <>
+              <div className="flex gap-2 flex-wrap">
+                {["breakfast", "lunch", "dinner", "snacks"].map(slot => (
+                  <button key={slot} onClick={() => setMealSlot(slot)}
+                    className="px-3 py-1.5 rounded-full text-[12px] font-medium capitalize"
+                    style={{ background: mealSlot === slot ? "#B23A48" : "#E5DECC", color: mealSlot === slot ? "#F7F3EC" : "#5C6470" }}>
+                    {slot}
+                  </button>
+                ))}
+              </div>
+              <div>
+                <SectionLabel>Add a food</SectionLabel>
+                <div className="flex gap-2">
+                  <input
+                    type="text" placeholder='e.g. "2 eggs" or "1 cup rice"'
+                    value={foodInput}
+                    onChange={e => { setFoodInput(e.target.value); }}
+                    onBlur={handlePreview}
+                    onKeyDown={e => { if (e.key === "Enter") handlePreview(); }}
+                    className="flex-1 px-3 py-2.5 rounded-xl bg-white text-[14px] text-[#1A2333] outline-none" style={{ border: "1px solid #E5DECC" }}
+                  />
+                  <button onClick={handlePreview} className="px-4 rounded-xl bg-[#E5DECC] text-[#5C6470] text-[13px] font-medium">Check</button>
+                </div>
+              </div>
+
+              {preview && (
+                <div className="bg-white rounded-xl p-3" style={{ border: "1px solid #E5DECC" }}>
+                  {!preview.matched && (
+                    <div className="text-[12px] text-[#B23A48] mb-2">Not in our food list — enter macros manually below.</div>
+                  )}
+                  <div className="text-[13px] font-medium text-[#1A2333] mb-2">{preview.name}</div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { field: "cal", label: "Cal" }, { field: "p", label: "Protein g" },
+                      { field: "c", label: "Carbs g" }, { field: "f", label: "Fat g" },
+                    ].map(f => (
+                      <div key={f.field}>
+                        <div className="text-[10px] text-[#8B93A1] font-mono uppercase mb-0.5">{f.label}</div>
+                        <input type="number" value={preview[f.field]}
+                          onChange={e => adjustPreviewField(f.field, e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg bg-[#F7F3EC] font-mono text-[13px] text-[#1A2333] outline-none" style={{ border: "1px solid #E5DECC" }} />
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={addFood} className="w-full mt-3 py-2 rounded-xl bg-[#1A2333] text-[#F7F3EC] text-[13px] font-medium">
+                    Add to {mealSlot}
+                  </button>
+                </div>
+              )}
+
+              <div className="pt-1">
+                <SectionLabel>Today's Food</SectionLabel>
+                <div className="space-y-3">
+                  {["breakfast", "lunch", "dinner", "snacks"].map(slot => {
+                    const items = dayLogs.meals?.[slot] || [];
+                    if (items.length === 0) return null;
+                    return (
+                      <div key={slot}>
+                        <div className="text-[11px] font-mono uppercase text-[#8B93A1] capitalize mb-1">{slot}</div>
+                        <div className="space-y-1.5">
+                          {items.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2" style={{ border: "1px solid #E5DECC" }}>
+                              <div>
+                                <div className="text-[13px] text-[#1A2333]">{item.name}</div>
+                                <div className="font-mono text-[11px] text-[#8B93A1]">{item.cal} cal · P{item.p} C{item.c} F{item.f}</div>
+                              </div>
+                              <button onClick={() => removeFood(slot, idx)} className="p-1"><Trash2 size={13} color="#B23A48" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {allMealItems.length === 0 && <div className="text-[13px] text-[#8B93A1]">No food logged yet today.</div>}
+                </div>
+                {allMealItems.length > 0 && (
+                  <div className="mt-3 bg-[#1A2333] rounded-xl p-3">
+                    <div className="font-mono text-[11px] uppercase text-[#8B93A1] mb-1">Day Total</div>
+                    <div className="font-mono text-[15px] text-[#F7F3EC]">
+                      {Math.round(dayTotals.cal)} cal · P{Math.round(dayTotals.p)}g · C{Math.round(dayTotals.c)}g · F{Math.round(dayTotals.f)}g
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {mode === "water" && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="font-mono text-[48px] text-[#3D7EA6]">{waterCups}</div>
+                <div className="text-[13px] text-[#8B93A1]">cups (8 oz each)</div>
+              </div>
+              <div className="flex items-center justify-center gap-4">
+                <button onClick={() => setWaterCups(c => Math.max(0, c - 1))} className="w-12 h-12 rounded-full bg-[#E5DECC] flex items-center justify-center text-[20px] text-[#5C6470]">−</button>
+                <button onClick={() => setWaterCups(c => c + 1)} className="w-12 h-12 rounded-full bg-[#3D7EA6] flex items-center justify-center text-[20px] text-white">+</button>
+              </div>
+              <button onClick={saveWater} className="w-full py-3 rounded-xl bg-[#1A2333] text-[#F7F3EC] font-medium text-[15px]">Save Water Intake</button>
+            </div>
+          )}
+
+          {mode === "sleep" && (
+            <div className="space-y-4">
+              <div>
+                <SectionLabel>Hours of sleep last night</SectionLabel>
+                <input type="number" inputMode="decimal" step="0.5" placeholder="e.g. 7.5" value={sleepHours}
+                  onChange={e => setSleepHours(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white font-mono text-[18px] text-[#1A2333] outline-none" style={{ border: "1px solid #E5DECC" }} />
+              </div>
+              <button onClick={saveSleep} className="w-full py-3 rounded-xl bg-[#1A2333] text-[#F7F3EC] font-medium text-[15px]">Save Sleep</button>
+            </div>
+          )}
+
+          {mode === "weight" && (
+            <div className="space-y-4">
+              <div>
+                <SectionLabel>Weight (lb)</SectionLabel>
+                <input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 165.5" value={weightVal}
+                  onChange={e => setWeightVal(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white font-mono text-[18px] text-[#1A2333] outline-none" style={{ border: "1px solid #E5DECC" }} />
+              </div>
+              <button onClick={saveWeight} className="w-full py-3 rounded-xl bg-[#1A2333] text-[#F7F3EC] font-medium text-[15px]">Save Weight</button>
+            </div>
+          )}
+
+          {mode === "note" && (
+            <div className="space-y-4">
+              <div>
+                <SectionLabel>Comments for today</SectionLabel>
+                <textarea placeholder="How are you feeling? Notes on training, recovery, anything..." value={noteText}
+                  onChange={e => setNoteText(e.target.value)} rows={6}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white text-[14px] text-[#1A2333] outline-none resize-none" style={{ border: "1px solid #E5DECC" }} />
+              </div>
+              <button onClick={saveNote} className="w-full py-3 rounded-xl bg-[#1A2333] text-[#F7F3EC] font-medium text-[15px]">Save Comment</button>
+            </div>
+          )}
+        </div>
+      </div>
+      <style>{`
+        @keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .animate-slideup { animation: slideup 0.25s ease-out; }
+      `}</style>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   TRAINING PLAN VIEW
+--------------------------------------------------------- */
+function TrainingPlanView({ plan, today, logs, onSelectDay }) {
+  const currentWeekIdx = plan.findIndex(w => w.days.some(d => d.date === todayKey(today)));
+  const [activeWeek, setActiveWeek] = useState(Math.max(0, currentWeekIdx));
+  const week = plan[activeWeek];
+
+  return (
+    <div className="px-4 pt-2 pb-4">
+      <div className="text-center mb-4 pt-2">
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#8B93A1] mb-1">16-Week Plan</div>
+        <h1 className="font-serif text-[24px] text-[#F7F3EC]">Marathon Training</h1>
+        <div className="text-[12px] text-[#8B93A1] mt-1">Race day: {fmtDate(RACE_DATE)} · Edit any day to fit your real plan</div>
+      </div>
+
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => setActiveWeek(w => Math.max(0, w - 1))} disabled={activeWeek === 0} className="p-2 rounded-full bg-[#1A2333] disabled:opacity-30">
+          <ChevronLeft size={16} color="#F7F3EC" />
+        </button>
+        <div className="text-center">
+          <div className="font-mono text-[12px] text-[#8B93A1]">WEEK {week.week} OF 16</div>
+          <div className="font-serif text-[16px] text-[#F7F3EC]">{week.focus}</div>
+        </div>
+        <button onClick={() => setActiveWeek(w => Math.min(plan.length - 1, w + 1))} disabled={activeWeek === plan.length - 1} className="p-2 rounded-full bg-[#1A2333] disabled:opacity-30">
+          <ChevronRight size={16} color="#F7F3EC" />
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {week.days.map(day => {
+          const d = new Date(day.date + "T00:00:00");
+          const isToday = day.date === todayKey(today);
+          const dayLogs = logs[day.date] || {};
+          const completed = (dayLogs.cardio || []).length > 0 || dayLogs.strengthDone;
+          const w = day.workout;
+          return (
+            <button key={day.date} onClick={() => onSelectDay(day.date)} className="w-full text-left">
+              <Card className={isToday ? "!border-[#D9622B] !border-2" : ""}>
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-center w-10">
+                    <div className="font-mono text-[10px] text-[#8B93A1] uppercase">{d.toLocaleDateString("en-US", { weekday: "short" })}</div>
+                    <div className="font-serif text-[18px] text-[#1A2333]">{d.getDate()}</div>
+                  </div>
+                  <div className="w-px h-9 bg-[#E5DECC]" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-medium text-[#1A2333]">{w?.label}</span>
+                      {completed && <Check size={14} color="#6B8F71" />}
+                    </div>
+                    {w?.distance > 0 && <div className="font-mono text-[12px] text-[#8B93A1]">{w.distance} mi</div>}
+                  </div>
+                  {w && <Pill color={WORKOUT_COLORS[w.type]}>{WORKOUT_LABELS[w.type]}</Pill>}
+                </div>
+              </Card>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   STRENGTH TAB
+--------------------------------------------------------- */
+function StrengthView({ logs, today, openLogger }) {
+  const last7 = Array.from({ length: 7 }).map((_, i) => todayKey(addDays(today, -6 + i)));
+  const completedDays = last7.filter(d => logs[d]?.strengthDone).length;
+
+  return (
+    <div className="px-4 pt-2 pb-4">
+      <div className="text-center mb-4 pt-2">
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#8B93A1] mb-1">3x / Week</div>
+        <h1 className="font-serif text-[24px] text-[#F7F3EC]">Strength Training</h1>
+        <div className="text-[12px] text-[#8B93A1] mt-1 px-4">{STRENGTH_SCHEDULE_NOTE}</div>
+      </div>
+
+      <Card className="mb-4">
+        <SectionLabel>Equipment</SectionLabel>
+        <div className="flex flex-wrap gap-1.5">
+          {EQUIPMENT.map(e => <Pill key={e} color="#5C6470">{e}</Pill>)}
+        </div>
+      </Card>
+
+      <Card className="mb-4 !bg-[#1A2333] !border-[#2A3548]">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-mono text-[11px] uppercase text-[#8B93A1]">This week</div>
+            <div className="font-serif text-[18px] text-[#F7F3EC]">{completedDays} / 3 sessions</div>
+          </div>
+          <button onClick={() => openLogger("strength")} className="px-4 py-2 rounded-full bg-[#D9622B] text-white text-[13px] font-medium">Log workout</button>
+        </div>
+      </Card>
+
+      <div className="space-y-3">
+        {STRENGTH_PLAN.map(day => (
+          <Card key={day.id}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-serif text-[16px] text-[#1A2333]">{day.name}</span>
+            </div>
+            <div className="text-[12px] text-[#8B93A1] italic mb-2">{day.warmup}</div>
+            <div className="space-y-1.5">
+              {day.exercises.map((ex, i) => (
+                <div key={i} className="flex items-center justify-between text-[13px]">
+                  <span className="text-[#1A2333]">{ex.name}</span>
+                  <span className="font-mono text-[12px] text-[#8B93A1]">{ex.sets}×{ex.reps}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   WORKOUT LIBRARY VIEW
+--------------------------------------------------------- */
+function LibraryView({ library, setLibrary }) {
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name: "", category: "Run", notes: "" });
+
+  function startNew() { setForm({ name: "", category: "Run", notes: "" }); setEditing("new"); }
+  function startEdit(item) { setForm({ name: item.name, category: item.category, notes: item.notes }); setEditing(item.id); }
+  function save() {
+    if (!form.name.trim()) return;
+    if (editing === "new") setLibrary([...library, { id: Date.now().toString(), ...form }]);
+    else setLibrary(library.map(item => item.id === editing ? { ...item, ...form } : item));
+    setEditing(null);
+  }
+  function remove(id) { setLibrary(library.filter(item => item.id !== id)); }
+
+  return (
+    <div className="px-4 pt-2 pb-4">
+      <div className="text-center mb-4 pt-2">
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#8B93A1] mb-1">Reference</div>
+        <h1 className="font-serif text-[24px] text-[#F7F3EC]">Run Workouts</h1>
+        <div className="text-[12px] text-[#8B93A1] mt-1">Saved run workout types for quick reference</div>
+      </div>
+      <button onClick={startNew} className="w-full mb-3 py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2" style={{ borderColor: "#3A4456", color: "#8B93A1" }}>
+        <Plus size={16} /> <span className="text-[14px] font-medium">Add a workout</span>
+      </button>
+      <div className="space-y-2">
+        {library.map(item => (
+          <Card key={item.id}>
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-serif text-[16px] text-[#1A2333]">{item.name}</span>
+                  <Pill color="#5C6470">{item.category}</Pill>
+                </div>
+                <div className="text-[13px] text-[#5C6470] mt-1 leading-relaxed">{item.notes}</div>
+              </div>
+              <div className="flex gap-1 ml-2">
+                <button onClick={() => startEdit(item)} className="p-1.5"><Edit3 size={14} color="#8B93A1" /></button>
+                <button onClick={() => remove(item.id)} className="p-1.5"><Trash2 size={14} color="#B23A48" /></button>
+              </div>
+            </div>
+          </Card>
+        ))}
+        {library.length === 0 && <EmptyState icon={BookOpen} title="No workouts saved" body="Add the workouts you've used in your training so they're handy for reference." />}
+      </div>
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setEditing(null)} />
+          <div className="relative w-full max-w-md bg-[#F7F3EC] rounded-t-3xl pb-8">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[#E5DECC]">
+              <h2 className="font-serif text-[20px] text-[#1A2333]">{editing === "new" ? "New Workout" : "Edit Workout"}</h2>
+              <button onClick={() => setEditing(null)} className="w-8 h-8 rounded-full bg-[#E5DECC] flex items-center justify-center"><X size={16} color="#5C6470" /></button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <SectionLabel>Name</SectionLabel>
+                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Hill Repeats"
+                  className="w-full px-3 py-2.5 rounded-xl bg-white text-[15px] text-[#1A2333] outline-none" style={{ border: "1px solid #E5DECC" }} />
+              </div>
+              <div>
+                <SectionLabel>Category</SectionLabel>
+                <div className="flex gap-2 flex-wrap">
+                  {["Run", "Strength", "Cross-train", "Recovery"].map(c => (
+                    <button key={c} onClick={() => setForm(f => ({ ...f, category: c }))} className="px-3 py-1.5 rounded-full text-[13px] font-medium"
+                      style={{ background: form.category === c ? "#1A2333" : "#E5DECC", color: form.category === c ? "#F7F3EC" : "#5C6470" }}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <SectionLabel>Details</SectionLabel>
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={4} placeholder="Describe the workout..."
+                  className="w-full px-3 py-2.5 rounded-xl bg-white text-[14px] text-[#1A2333] outline-none resize-none" style={{ border: "1px solid #E5DECC" }} />
+              </div>
+              <button onClick={save} className="w-full py-3 rounded-xl bg-[#1A2333] text-[#F7F3EC] font-medium text-[15px]">Save Workout</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   PROGRESS VIEW (charts)
+--------------------------------------------------------- */
+function ProgressView({ logs, today, targets }) {
+  const [range, setRange] = useState(14);
+
+  const data = useMemo(() => {
+    return Array.from({ length: range }).map((_, i) => {
+      const d = addDays(today, -(range - 1) + i);
+      const key = todayKey(d);
+      const dayLogs = logs[key] || {};
+      const allMeals = [...(dayLogs.meals?.breakfast || []), ...(dayLogs.meals?.lunch || []), ...(dayLogs.meals?.dinner || []), ...(dayLogs.meals?.snacks || [])];
+      const macros = sumMacros(allMeals);
+      const cardioMiles = (dayLogs.cardio || []).reduce((s, c) => s + (parseFloat(c.distance) || 0), 0);
+      return {
+        date: fmtShort(d),
+        weight: dayLogs.weight || null,
+        sleep: dayLogs.sleep || null,
+        water: dayLogs.water || 0,
+        calories: macros.cal || null,
+        protein: macros.p || null,
+        miles: cardioMiles,
+      };
+    });
+  }, [logs, today, range]);
+
+  const weightPoints = data.filter(d => d.weight != null);
+  const avgSleep = data.filter(d => d.sleep != null);
+  const avgSleepVal = avgSleep.length ? (avgSleep.reduce((s, d) => s + d.sleep, 0) / avgSleep.length).toFixed(1) : "—";
+  const totalMiles = data.reduce((s, d) => s + d.miles, 0).toFixed(1);
+  const avgWater = data.length ? (data.reduce((s, d) => s + d.water, 0) / data.length).toFixed(1) : "—";
+
+  return (
+    <div className="px-4 pt-2 pb-4">
+      <div className="text-center mb-4 pt-2">
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#8B93A1] mb-1">Trends</div>
+        <h1 className="font-serif text-[24px] text-[#F7F3EC]">Progress</h1>
+      </div>
+
+      <div className="flex gap-2 mb-4 justify-center">
+        {[7, 14, 30].map(r => (
+          <button key={r} onClick={() => setRange(r)} className="px-3 py-1.5 rounded-full text-[12px] font-medium"
+            style={{ background: range === r ? "#D9622B" : "#2A3548", color: range === r ? "white" : "#8B93A1" }}>
+            {r}d
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <Card className="!p-3 text-center">
+          <div className="font-mono text-[18px] text-[#1A2333]">{totalMiles}</div>
+          <div className="text-[10px] text-[#8B93A1]">miles run</div>
+        </Card>
+        <Card className="!p-3 text-center">
+          <div className="font-mono text-[18px] text-[#1A2333]">{avgSleepVal}h</div>
+          <div className="text-[10px] text-[#8B93A1]">avg sleep</div>
+        </Card>
+        <Card className="!p-3 text-center">
+          <div className="font-mono text-[18px] text-[#1A2333]">{avgWater}</div>
+          <div className="text-[10px] text-[#8B93A1]">avg water cups</div>
+        </Card>
+      </div>
+
+      <Card className="mb-4">
+        <SectionLabel>Weight (lb)</SectionLabel>
+        {weightPoints.length === 0 ? (
+          <div className="text-[13px] text-[#8B93A1] py-4 text-center">No weight logged in this range yet</div>
+        ) : (
+          <div style={{ width: "100%", height: 160 }}>
+            <ResponsiveContainer>
+              <LineChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5DECC" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8B93A1" }} />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10, fill: "#8B93A1" }} width={32} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Line type="monotone" dataKey="weight" stroke="#D9622B" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </Card>
+
+      <Card className="mb-4">
+        <SectionLabel>Calories per day</SectionLabel>
+        <div style={{ width: "100%", height: 160 }}>
+          <ResponsiveContainer>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5DECC" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8B93A1" }} />
+              <YAxis tick={{ fontSize: 10, fill: "#8B93A1" }} width={32} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              <Bar dataKey="calories" fill="#6B8F71" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="text-[11px] text-[#8B93A1] mt-1 text-center">Target: {targets.cal} cal/day</div>
+      </Card>
+
+      <Card className="mb-4">
+        <SectionLabel>Sleep (hours)</SectionLabel>
+        <div style={{ width: "100%", height: 140 }}>
+          <ResponsiveContainer>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5DECC" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8B93A1" }} />
+              <YAxis tick={{ fontSize: 10, fill: "#8B93A1" }} width={28} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              <Bar dataKey="sleep" fill="#6B5BA0" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      <Card>
+        <SectionLabel>Running mileage</SectionLabel>
+        <div style={{ width: "100%", height: 140 }}>
+          <ResponsiveContainer>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5DECC" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8B93A1" }} />
+              <YAxis tick={{ fontSize: 10, fill: "#8B93A1" }} width={28} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              <Bar dataKey="miles" fill="#D9622B" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   NUTRITION TAB (targets + history)
+--------------------------------------------------------- */
+function NutritionView({ targets, setTargets, logs, today }) {
+  const [editingTargets, setEditingTargets] = useState(false);
+  const [form, setForm] = useState(targets);
+  const key = todayKey(today);
+  const dayLogs = logs[key] || {};
+  const allMeals = [...(dayLogs.meals?.breakfast || []), ...(dayLogs.meals?.lunch || []), ...(dayLogs.meals?.dinner || []), ...(dayLogs.meals?.snacks || [])];
+  const macros = sumMacros(allMeals);
+
+  function save() {
+    setTargets({ cal: Number(form.cal), p: Number(form.p), c: Number(form.c), f: Number(form.f) });
+    setEditingTargets(false);
+  }
+
+  return (
+    <div className="px-4 pt-2 pb-4">
+      <div className="text-center mb-4 pt-2">
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#8B93A1] mb-1">Daily Targets</div>
+        <h1 className="font-serif text-[24px] text-[#F7F3EC]">Nutrition</h1>
+      </div>
+
+      <Card className="mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <SectionLabel>Today vs Target</SectionLabel>
+          <button onClick={() => { setForm(targets); setEditingTargets(true); }} className="text-[12px] text-[#8B93A1] font-medium flex items-center gap-1">
+            <Edit3 size={12} /> Edit targets
+          </button>
+        </div>
+        <div className="text-center mb-3">
+          <div className="font-mono text-[30px] text-[#1A2333]">{Math.round(macros.cal)}<span className="text-[16px] text-[#8B93A1]"> / {targets.cal} cal</span></div>
+        </div>
+        <div className="space-y-2">
+          <MacroBar label="Protein" value={macros.p} target={targets.p} color="#D9622B" />
+          <MacroBar label="Carbs" value={macros.c} target={targets.c} color="#6B8F71" />
+          <MacroBar label="Fat" value={macros.f} target={targets.f} color="#6B5BA0" />
+        </div>
+      </Card>
+
+      <Card>
+        <SectionLabel>How estimates work</SectionLabel>
+        <div className="text-[13px] text-[#5C6470] leading-relaxed">
+          Type a food like "2 eggs" or "6 oz chicken breast" when logging meals. The app matches it against a built-in food list and estimates calories and macros — you can always tap the numbers to correct them before saving.
+        </div>
+      </Card>
+
+      {editingTargets && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setEditingTargets(false)} />
+          <div className="relative w-full max-w-md bg-[#F7F3EC] rounded-t-3xl pb-8">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[#E5DECC]">
+              <h2 className="font-serif text-[20px] text-[#1A2333]">Edit Daily Targets</h2>
+              <button onClick={() => setEditingTargets(false)} className="w-8 h-8 rounded-full bg-[#E5DECC] flex items-center justify-center"><X size={16} color="#5C6470" /></button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {[
+                { field: "cal", label: "Calories" }, { field: "p", label: "Protein (g)" },
+                { field: "c", label: "Carbs (g)" }, { field: "f", label: "Fat (g)" },
+              ].map(f => (
+                <div key={f.field}>
+                  <SectionLabel>{f.label}</SectionLabel>
+                  <input type="number" value={form[f.field]} onChange={e => setForm(p => ({ ...p, [f.field]: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl bg-white font-mono text-[16px] text-[#1A2333] outline-none" style={{ border: "1px solid #E5DECC" }} />
+                </div>
+              ))}
+              <button onClick={save} className="w-full py-3 rounded-xl bg-[#1A2333] text-[#F7F3EC] font-medium text-[15px] mt-2">Save Targets</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   HISTORY VIEW
+--------------------------------------------------------- */
+function HistoryView({ logs, onSelectDay }) {
+  const dates = Object.keys(logs).sort((a, b) => b.localeCompare(a));
+  return (
+    <div className="px-4 pt-2 pb-4">
+      <div className="text-center mb-4 pt-2">
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#8B93A1] mb-1">Logbook</div>
+        <h1 className="font-serif text-[24px] text-[#F7F3EC]">History</h1>
+      </div>
+      {dates.length === 0 ? (
+        <EmptyState icon={Calendar} title="No entries yet" body="Start logging from the Today tab and your history will appear here." />
+      ) : (
+        <div className="space-y-3">
+          {dates.map(date => {
+            const d = new Date(date + "T00:00:00");
+            const dayLogs = logs[date];
+            const cardio = dayLogs.cardio || [];
+            const allMeals = [...(dayLogs.meals?.breakfast || []), ...(dayLogs.meals?.lunch || []), ...(dayLogs.meals?.dinner || []), ...(dayLogs.meals?.snacks || [])];
+            const macros = sumMacros(allMeals);
+            return (
+              <button key={date} onClick={() => onSelectDay(date)} className="w-full text-left">
+                <Card>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-serif text-[15px] text-[#1A2333]">{fmtDate(d)}</span>
+                    <ChevronRight size={14} color="#8B93A1" />
+                  </div>
+                  <div className="flex gap-3 flex-wrap text-[12px] text-[#5C6470]">
+                    {cardio.length > 0 && <span className="flex items-center gap-1"><Activity size={12} color="#D9622B" /> {cardio.length} activity</span>}
+                    {dayLogs.strengthDone && <span className="flex items-center gap-1"><Dumbbell size={12} color="#5C6470" /> strength</span>}
+                    {macros.cal > 0 && <span className="flex items-center gap-1"><Flame size={12} color="#B23A48" /> {Math.round(macros.cal)} cal</span>}
+                    {dayLogs.water > 0 && <span className="flex items-center gap-1"><Droplet size={12} color="#3D7EA6" /> {dayLogs.water} cups</span>}
+                    {dayLogs.sleep && <span className="flex items-center gap-1"><Moon size={12} color="#6B5BA0" /> {dayLogs.sleep}h</span>}
+                    {dayLogs.weight && <span className="flex items-center gap-1"><Scale size={12} color="#8B93A1" /> {dayLogs.weight}lb</span>}
+                  </div>
+                  {dayLogs.note && <div className="text-[13px] text-[#1A2333] mt-2 italic line-clamp-2">"{dayLogs.note}"</div>}
+                </Card>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   DAY DETAIL VIEW
+--------------------------------------------------------- */
+function DayDetailView({ date, logs, onBack, openLogger }) {
+  const d = new Date(date + "T00:00:00");
+  const dayLogs = logs[date] || {};
+  const allMeals = [...(dayLogs.meals?.breakfast || []), ...(dayLogs.meals?.lunch || []), ...(dayLogs.meals?.dinner || []), ...(dayLogs.meals?.snacks || [])];
+  const macros = sumMacros(allMeals);
+
+  return (
+    <div className="px-4 pt-2 pb-4">
+      <button onClick={onBack} className="flex items-center gap-1 text-[#8B93A1] mb-3"><ChevronLeft size={16} /> <span className="text-[13px]">Back</span></button>
+      <h1 className="font-serif text-[22px] text-[#F7F3EC] mb-4">{fmtDateLong(d)}</h1>
+      <div className="space-y-3">
+        <button onClick={() => openLogger("cardio", date)} className="w-full text-left">
+          <Card>
+            <div className="flex items-center gap-2 mb-1"><Activity size={16} color="#D9622B" /><span className="font-serif text-[15px] text-[#1A2333]">Cardio</span></div>
+            {(dayLogs.cardio || []).length === 0 ? <div className="text-[13px] text-[#8B93A1]">Nothing logged · tap to add</div> :
+              dayLogs.cardio.map(c => <div key={c.id} className="text-[13px] text-[#5C6470]">{c.activity} {c.distance && `· ${c.distance}mi`} {c.time && `· ${c.time}`}</div>)}
+          </Card>
+        </button>
+        <button onClick={() => openLogger("strength", date)} className="w-full text-left">
+          <Card>
+            <div className="flex items-center gap-2 mb-1"><Dumbbell size={16} color="#5C6470" /><span className="font-serif text-[15px] text-[#1A2333]">Strength</span></div>
+            <div className="text-[13px] text-[#8B93A1]">{dayLogs.strengthDone ? "Completed · tap to view" : "Not logged · tap to add"}</div>
+          </Card>
+        </button>
+        <button onClick={() => openLogger("meals", date)} className="w-full text-left">
+          <Card>
+            <div className="flex items-center gap-2 mb-1"><UtensilsCrossed size={16} color="#B23A48" /><span className="font-serif text-[15px] text-[#1A2333]">Meals</span></div>
+            {allMeals.length === 0 ? <div className="text-[13px] text-[#8B93A1]">Nothing logged · tap to add</div> :
+              <div className="text-[13px] text-[#5C6470] font-mono">{Math.round(macros.cal)} cal · P{Math.round(macros.p)} C{Math.round(macros.c)} F{Math.round(macros.f)}</div>}
+          </Card>
+        </button>
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => openLogger("water", date)} className="text-left">
+            <Card className="!p-3"><Droplet size={15} color="#3D7EA6" className="mb-1" /><div className="font-mono text-[16px] text-[#1A2333]">{dayLogs.water || 0}</div><div className="text-[11px] text-[#8B93A1]">water</div></Card>
+          </button>
+          <button onClick={() => openLogger("sleep", date)} className="text-left">
+            <Card className="!p-3"><Moon size={15} color="#6B5BA0" className="mb-1" /><div className="font-mono text-[16px] text-[#1A2333]">{dayLogs.sleep ? `${dayLogs.sleep}h` : "—"}</div><div className="text-[11px] text-[#8B93A1]">sleep</div></Card>
+          </button>
+          <button onClick={() => openLogger("weight", date)} className="text-left">
+            <Card className="!p-3"><Scale size={15} color="#8B93A1" className="mb-1" /><div className="font-mono text-[16px] text-[#1A2333]">{dayLogs.weight || "—"}</div><div className="text-[11px] text-[#8B93A1]">weight</div></Card>
+          </button>
+        </div>
+        <button onClick={() => openLogger("note", date)} className="w-full text-left">
+          <Card>
+            <div className="flex items-center gap-2 mb-1"><Edit3 size={16} color="#8B93A1" /><span className="font-serif text-[15px] text-[#1A2333]">Comments</span></div>
+            <div className="text-[13px] text-[#5C6470] whitespace-pre-wrap">{dayLogs.note || "Tap to add a comment about today"}</div>
+          </Card>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   MAIN APP
+--------------------------------------------------------- */
+function App() {
+  const [today] = useState(getToday());
+  const [tab, setTab] = useState("today");
+  const [plan] = useState(() => buildDefaultPlan());
+  const [library, setLibrary] = useState(DEFAULT_WORKOUT_LIBRARY);
+  const [logs, setLogs] = useState({});
+  const [targets, setTargets] = useState(DEFAULT_TARGETS);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null);
+  const [detailDate, setDetailDate] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const savedLogs = await storageGet("training-logs", {});
+      const savedLibrary = await storageGet("workout-library", DEFAULT_WORKOUT_LIBRARY);
+      const savedTargets = await storageGet("macro-targets", DEFAULT_TARGETS);
+      setLogs(savedLogs); setLibrary(savedLibrary); setTargets(savedTargets);
+      setLoading(false);
+    })();
+  }, []);
+
+  useEffect(() => { if (!loading) storageSet("training-logs", logs); }, [logs, loading]);
+  useEffect(() => { if (!loading) storageSet("workout-library", library); }, [library, loading]);
+  useEffect(() => { if (!loading) storageSet("macro-targets", targets); }, [targets, loading]);
+
+  function openLogger(mode, date) { setModal({ mode, date: date || todayKey(today) }); }
+  function saveDayLog(date, patch) {
+    setLogs(prev => ({ ...prev, [date]: { ...(prev[date] || {}), ...patch } }));
+  }
+
+  const weekInfo = useMemo(() => plan.find(w => w.days.some(d => d.date === todayKey(today))), [plan, today]);
+
+  if (loading) {
+    return <div className="min-h-screen bg-[#1A2333] flex items-center justify-center"><div className="font-mono text-[#8B93A1] text-[13px]">Loading...</div></div>;
+  }
+
+  const TABS = [
+    { id: "today", icon: Home, label: "Today" },
+    { id: "plan", icon: Calendar, label: "Run Plan" },
+    { id: "strength", icon: Dumbbell, label: "Strength" },
+    { id: "nutrition", icon: UtensilsCrossed, label: "Nutrition" },
+    { id: "progress", icon: TrendingUp, label: "Progress" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#1A2333] flex flex-col font-sans" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+        .font-serif { font-family: 'Fraunces', serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      `}</style>
+
+      <div className="flex-1 overflow-y-auto max-w-md w-full mx-auto pb-2">
+        {detailDate ? (
+          <DayDetailView date={detailDate} logs={logs} onBack={() => setDetailDate(null)} openLogger={(mode, date) => openLogger(mode, date)} />
+        ) : (
+          <>
+            {tab === "today" && <TodayView today={today} logs={logs} openLogger={openLogger} weekInfo={weekInfo} targets={targets} />}
+            {tab === "plan" && <TrainingPlanView plan={plan} today={today} logs={logs} onSelectDay={setDetailDate} />}
+            {tab === "strength" && <StrengthView logs={logs} today={today} openLogger={openLogger} />}
+            {tab === "nutrition" && <NutritionView targets={targets} setTargets={setTargets} logs={logs} today={today} />}
+            {tab === "progress" && <ProgressView logs={logs} today={today} targets={targets} />}
+          </>
+        )}
+      </div>
+
+      {!detailDate && (
+        <div className="max-w-md w-full mx-auto bg-[#151D2B] border-t border-[#2A3548] flex items-center justify-around px-1 py-2 pb-safe">
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} className="flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-xl flex-1"
+              style={{ color: tab === t.id ? "#D9622B" : "#5C6470" }}>
+              <t.icon size={19} />
+              <span className="text-[9.5px] font-medium">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <LogModal mode={modal.mode} date={new Date(modal.date + "T00:00:00")} dayLogs={logs[modal.date] || {}}
+          onClose={() => setModal(null)} onSave={(patch) => saveDayLog(modal.date, patch)} />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+</script>
+</body>
+</html>
